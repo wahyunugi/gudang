@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Scan Gudang Teknik</title>
+<style>
+  :root{ --bir:#1F4E78; --hij:#1E7A46; --abu:#6B7280; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:rgba(31,78,120,.2); }
+  body{ margin:0; font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+        background:#F3F4F6; color:#111; font-size:16px; }
+  header{ background:var(--bir); color:#fff; padding:12px 14px; }
+  header h1{ margin:0; font-size:16px; font-weight:600; }
+  .tab{ display:flex; }
+  .tab button{ flex:1; padding:14px; border:0; font-size:15px; font-weight:600;
+        background:#D8DEE6; color:#333; }
+  .tab button.on{ background:#fff; color:var(--bir); box-shadow:inset 0 -3px 0 var(--bir); }
+  .backlog{ font-size:13px; padding:9px 14px; background:#FFF4CE; color:#6B4E00; }
+  .wrap{ padding:14px; }
+  .card{ background:#fff; border-radius:10px; padding:14px; margin-bottom:12px;
+         box-shadow:0 1px 3px rgba(0,0,0,.12); }
+  label{ display:block; font-size:13px; color:var(--abu); margin:10px 0 4px; font-weight:600; }
+  input{ width:100%; padding:12px; font-size:16px; border:1px solid #CBD5E1; border-radius:8px;
+         background:#fff; color:#111; }
+  input:focus{ outline:2px solid var(--bir); border-color:var(--bir); }
+  button.aksi{ width:100%; padding:16px; font-size:16px; font-weight:700; border:0;
+        border-radius:8px; color:#fff; background:var(--bir); margin-top:12px; cursor:pointer; }
+  button.simpan{ background:var(--hij); }
+  button.batal{ background:#9AA5B1; }
+  #reader{ width:100%; border-radius:10px; overflow:hidden; margin-top:10px; }
+  #reader video{ width:100% !important; border-radius:10px; }
+  .item .kode{ font-weight:700; color:var(--bir); font-size:16px; }
+  .item .desc{ margin:4px 0; font-size:15px; }
+  .item .meta{ font-size:13px; color:var(--abu); }
+  .pesan{ padding:11px; border-radius:8px; font-size:14px; margin-top:10px; }
+  .ok{ background:#E3F5EA; color:#14532D; } .err{ background:#FDE7E5; color:#7F1D1D; }
+  .hasil{ max-height:250px; overflow-y:auto; margin-top:6px; }
+  .hasil div{ padding:12px 10px; border-bottom:1px solid #E5E7EB; cursor:pointer; }
+  .hasil .k{ font-weight:700; color:var(--bir); font-size:14px; }
+  .hasil .d{ font-size:13px; }
+  .kecil{ font-size:12px; color:var(--abu); text-align:center; margin:14px 0; }
+  .sembunyi{ display:none !important; }
+  #fatal{ background:#7F1D1D; color:#fff; padding:12px 14px; font-size:13px; }
+</style>
+</head>
+<body>
+
+<!-- ================================================================
+     ISI DUA BARIS DI BAWAH INI SEBELUM DIPAKAI.
+     API   = URL Web app dari Apps Script, harus berakhiran /exec
+     TOKEN = harus sama persis dengan TOKEN di Code.gs
+     ================================================================ -->
+<script>
+  var API   = 'https://script.google.com/macros/s/AKfycbxde7ZH5Uxq39bIj5DjqHKkv8odROmr-xK6lJYrCw33vue2Uybz39qOFYppJKLkPZGQ_Q/exec';
+  var TOKEN = '1234';
+</script>
+
+<div id="fatal" class="sembunyi"></div>
+
+<header><h1>Scan Gudang Teknik</h1></header>
+
+<div class="tab">
+  <button id="tMasuk" class="on">BARANG MASUK</button>
+  <button id="tKeluar">BARANG KELUAR</button>
+</div>
+<div class="backlog" id="backlog">Memuat…</div>
+
+<div class="wrap">
+
+  <div class="card">
+    <button class="aksi" id="btnScan">BUKA KAMERA</button>
+    <button class="aksi batal" id="btnTes">TES KONEKSI</button>
+    <div id="reader" class="sembunyi"></div>
+    <label>Atau cari manual (minimal 3 huruf)</label>
+    <input id="q" placeholder="ketik kode / nama barang" autocomplete="off">
+    <div class="hasil" id="hasil"></div>
+  </div>
+
+  <div class="card sembunyi" id="kartu">
+    <div class="item">
+      <div class="kode" id="iKode"></div>
+      <div class="desc" id="iDesc"></div>
+      <div class="meta" id="iMeta"></div>
+    </div>
+
+    <label>QTY <span id="lUom"></span></label>
+    <input id="qty" type="number" inputmode="decimal" min="0" step="any">
+
+    <div id="grupMasuk">
+      <label>Supplier</label>
+      <input id="supplier" autocomplete="off">
+      <label>No PO</label>
+      <input id="po" autocomplete="off">
+      <label>No PR</label>
+      <input id="pr" autocomplete="off">
+    </div>
+
+    <div id="grupKeluar" class="sembunyi">
+      <label>Unit</label>
+      <input id="unit" autocomplete="off">
+      <label>Keperluan</label>
+      <input id="keperluan" autocomplete="off">
+      <label>Orang Gudang</label>
+      <input id="gudang" autocomplete="off">
+    </div>
+
+    <label>User</label>
+    <input id="user" autocomplete="off">
+    <label>Lokasi (nomor rak)</label>
+    <input id="lokasi" autocomplete="off">
+
+    <button class="aksi simpan" id="btnSimpan">SIMPAN</button>
+    <button class="aksi batal" id="btnBatal">BATAL</button>
+  </div>
+
+  <div id="pesan"></div>
+  <div class="kecil">Catatan sementara. SAP tetap sumber resmi.</div>
+</div>
+
+<script>
+/* Tampilkan error apa pun di layar HP, supaya tidak "diam saja". */
+function bootGagal(t){
+  var f = document.getElementById('fatal');
+  f.className = ''; f.textContent = 'MASALAH: ' + t;
+}
+window.onerror = function(m, u, b){ bootGagal(m + ' (baris ' + b + ')'); };
+</script>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"
+        onerror="bootGagal('Pustaka kamera gagal dimuat. Cek koneksi internet.')"></script>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var mode = 'masuk', terpilih = null, scanner = null, jalan = false, timer = null;
+
+  if (API.indexOf('TEMPEL') === 0){
+    bootGagal('Baris API di file scanner.html belum diisi URL Apps Script.');
+  }
+
+  function api(muatan){
+    muatan.token = TOKEN;
+    return fetch(API, {
+      method:'POST', redirect:'follow',
+      headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+      body: JSON.stringify(muatan)
+    }).then(function(r){
+      return r.text().then(function(teks){
+        try {
+          return JSON.parse(teks);
+        } catch (e) {
+          /* Balasan berupa HTML, bukan JSON. Terjemahkan jadi pesan yang bisa ditindaklanjuti. */
+          var sebab;
+          if (teks.indexOf('accounts.google.com') > -1 || teks.indexOf('ServiceLogin') > -1) {
+            sebab = 'Server meminta login Google. Deployment masih "Anyone with Google account". '
+                  + 'Deploy ulang dan pilih "Anyone".';
+          } else if (teks.indexOf('Script function not found') > -1 || teks.indexOf('doPost') > -1) {
+            sebab = 'Fungsi doPost belum ada di versi yang aktif. Deploy ulang dengan Version: New version.';
+          } else if (teks.indexOf('API Gudang Teknik aktif') > -1) {
+            sebab = 'Permintaan masuk sebagai GET, bukan POST. Pastikan URL berakhiran /exec, bukan /dev.';
+          } else if (teks.indexOf('Authorization') > -1 || teks.indexOf('authoriz') > -1) {
+            sebab = 'Skrip belum diberi izin. Buka URL /exec di browser, selesaikan proses Authorize.';
+          } else if (String(teks).trim() === '') {
+            var kosong = new Error('Balasan server hilang di perjalanan.');
+            kosong.kosong = true;
+            throw kosong;
+          } else {
+            sebab = 'Balasan server bukan JSON. Cuplikan: ' + teks.substring(0, 120);
+          }
+          throw new Error(sebab);
+        }
+      });
+    });
+  }
+
+  function tampil(t, ok){
+    $('pesan').innerHTML = '<div class="pesan ' + (ok?'ok':'err') + '">' + t + '</div>';
+  }
+  function gagal(e){ tampil('Gagal terhubung: ' + (e && e.message ? e.message : e), false); }
+
+  function setMode(m){
+    mode = m;
+    $('tMasuk').className  = (m==='masuk')  ? 'on' : '';
+    $('tKeluar').className = (m==='keluar') ? 'on' : '';
+    $('grupMasuk').className  = (m==='masuk')  ? '' : 'sembunyi';
+    $('grupKeluar').className = (m==='keluar') ? '' : 'sembunyi';
+    reset();
+  }
+
+  function toggleScan(){
+    if (jalan){ hentikan(); return; }
+    if (typeof Html5Qrcode === 'undefined'){
+      tampil('Pustaka kamera belum termuat. Refresh halaman.', false); return;
+    }
+    $('reader').className = '';
+    $('btnScan').textContent = 'TUTUP KAMERA';
+    jalan = true;
+    scanner = new Html5Qrcode('reader', { formatsToSupport:[
+      Html5QrcodeSupportedFormats.QR_CODE,
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.DATA_MATRIX ]});
+    scanner.start({ facingMode:'environment' },
+      { fps:12, qrbox:{ width:250, height:250 } },
+      function(teks){ if (navigator.vibrate) navigator.vibrate(60); hentikan(); ambil(teks); },
+      function(){}
+    ).catch(function(e){
+      jalan = false;
+      $('reader').className = 'sembunyi';
+      $('btnScan').textContent = 'BUKA KAMERA';
+      tampil('Kamera gagal dibuka: ' + e + '. Pastikan halaman dibuka lewat alamat https dan izin kamera diberikan.', false);
+    });
+  }
+
+  function hentikan(){
+    if (scanner && jalan){
+      scanner.stop().then(function(){ scanner.clear(); }).catch(function(){});
+    }
+    jalan = false;
+    $('reader').className = 'sembunyi';
+    $('btnScan').textContent = 'BUKA KAMERA';
+  }
+
+  function ambil(kode){
+    tampil('Mencari ' + kode + '…', true);
+    api({ aksi:'cari', kode:kode }).then(function(r){
+      if (!r.ok){ tampil(r.pesan + ' Coba cari manual.', false); return; }
+      pilih(r);
+    }).catch(gagal);
+  }
+  window.ambil = ambil;
+
+  function cari(){
+    clearTimeout(timer);
+    timer = setTimeout(function(){
+      var q = $('q').value;
+      if (q.trim().length < 3){ $('hasil').innerHTML = ''; return; }
+      api({ aksi:'teks', kueri:q }).then(function(r){
+        var list = r.hasil || [];
+        $('hasil').innerHTML = list.length ? list.map(function(x){
+          return '<div onclick="ambil(\'' + x.kode + '\')"><div class="k">' + x.kode +
+                 '</div><div class="d">' + x.deskripsi + '</div></div>';
+        }).join('') : '<div class="d">Tidak ada yang cocok.</div>';
+      }).catch(gagal);
+    }, 350);
+  }
+
+  function pilih(r){
+    terpilih = r;
+    $('iKode').textContent = r.kode;
+    $('iDesc').textContent = r.deskripsi;
+    $('iMeta').textContent = 'UOM ' + r.uom + ' · Total ' + r.stok + ' · ' + r.gudang;
+    $('lUom').textContent = '(' + r.uom + ')';
+    if (r.rak) $('lokasi').value = r.rak;
+    $('kartu').className = 'card';
+    $('hasil').innerHTML = ''; $('q').value = ''; $('pesan').innerHTML = '';
+    $('qty').focus();
+  }
+
+  function simpan(){
+    if (!terpilih){ tampil('Belum ada material dipilih.', false); return; }
+    if (!(Number($('qty').value) > 0)){ tampil('QTY harus lebih dari nol.', false); return; }
+    var b = $('btnSimpan'); b.disabled = true; b.textContent = 'MENYIMPAN…';
+    var data = { id:'t'+Date.now()+Math.floor(Math.random()*1000),
+                 jenis:mode, kode:terpilih.kode, qty:$('qty').value,
+                 user:$('user').value, lokasi:$('lokasi').value };
+    if (mode === 'masuk'){
+      data.supplier = $('supplier').value; data.po = $('po').value; data.pr = $('pr').value;
+    } else {
+      data.unit = $('unit').value; data.keperluan = $('keperluan').value;
+      data.gudang = $('gudang').value;
+    }
+    api({ aksi:'simpan', data:data }).then(function(r){
+      b.disabled = false; b.textContent = 'SIMPAN';
+      if (!r.ok){ tampil(r.pesan || 'Gagal menyimpan.', false); return; }
+      tampil('Tersimpan: ' + r.deskripsi + ' — ' + r.qty + ' ' + r.uom + ' (baris ' + r.baris + ')', true);
+      reset(); muatBacklog();
+    }).catch(function(e){
+      b.disabled = false; b.textContent = 'SIMPAN';
+      if (e.kosong){
+        /* Penulisan biasanya berhasil, hanya balasannya hilang. Tanyakan ke server. */
+        api({ aksi:'cek', jenis:data.jenis, id:data.id }).then(function(c){
+          if (c && c.ada){
+            tampil('Tersimpan (baris ' + c.baris + '). Balasan sempat hilang, sudah diverifikasi.', true);
+            reset(); muatBacklog();
+          } else {
+            tampil('Belum tersimpan. Silakan ulangi.', false);
+          }
+        }).catch(function(){ tampil('Balasan hilang dan verifikasi gagal. Cek sheet manual.', false); });
+        return;
+      }
+      gagal(e);
+    });
+  }
+
+  function reset(){
+    terpilih = null;
+    $('kartu').className = 'card sembunyi';
+    ['qty','supplier','po','pr','unit','keperluan','gudang','user','lokasi']
+      .forEach(function(id){ $(id).value = ''; });
+    $('hasil').innerHTML = '';
+  }
+
+  function muatBacklog(){
+    api({ aksi:'ringkasan' }).then(function(r){
+      var d = (r && r.data) || {};
+      $('backlog').textContent = 'Transaksi hari ini — Masuk: ' +
+        (d.masuk !== undefined ? d.masuk : '?') + ' · Keluar: ' +
+        (d.keluar !== undefined ? d.keluar : '?');
+    }).catch(function(){
+      $('backlog').textContent = 'Backlog tidak bisa dimuat — cek URL dan token.';
+    });
+  }
+
+  $('tMasuk').addEventListener('click', function(){ setMode('masuk'); });
+  $('tKeluar').addEventListener('click', function(){ setMode('keluar'); });
+  $('btnScan').addEventListener('click', toggleScan);
+  $('btnTes').addEventListener('click', function(){
+    tampil('Menguji koneksi ke Apps Script…', true);
+    api({ aksi:'ringkasan' }).then(function(r){
+      if (r && r.ok){
+        tampil('Koneksi BERHASIL. Backlog masuk: ' + r.data.masuk +
+               ', keluar: ' + r.data.keluar + '. Semua siap dipakai.', true);
+        muatBacklog();
+      } else {
+        tampil('Terhubung, tapi ditolak: ' + (r.pesan || 'sebab tidak diketahui') +
+               ' — biasanya TOKEN di scanner.html dan Code.gs berbeda.', false);
+      }
+    }).catch(function(e){ tampil(e.message, false); });
+  });
+  $('btnSimpan').addEventListener('click', simpan);
+  $('btnBatal').addEventListener('click', reset);
+  $('q').addEventListener('input', cari);
+
+  muatBacklog();
+})();
+</script>
+</body>
+</html>
